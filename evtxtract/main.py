@@ -7,7 +7,6 @@ import argparse
 import evtxtract
 import evtxtract.carvers
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -44,6 +43,8 @@ def main(argv=None):
                         help="Enable debug logging")
     parser.add_argument("-q", "--quiet", action="store_true",
                         help="Disable all output but errors")
+    parser.add_argument("-c", "--complete", action="store_true",
+                        help="Extract complete records only")
     args = parser.parse_args()
 
     if args.verbose:
@@ -57,8 +58,8 @@ def main(argv=None):
         num_complete = 0
         num_incomplete = 0
 
-        print('<?xml version="1.0" encoding="UTF-8"?>')
-        print('<evtxtract>')
+        os.write(sys.stdout.fileno(), '<evtxtract>\n'.encode())
+        os.fsync(sys.stdout.fileno())
         for r in evtxtract.extract(mm):
             if isinstance(r, evtxtract.CompleteRecord):
                 num_complete += 1
@@ -69,16 +70,17 @@ def main(argv=None):
                     logger.warn('failed to output record at offset: 0x%x: %s', r.offset, str(e), exc_info=True)
 
             elif isinstance(r, evtxtract.IncompleteRecord):
-                num_incomplete += 1
+                if not args.complete:
+                    num_incomplete += 1
 
-                try:
-                    os.write(sys.stdout.fileno(), format_incomplete_record(r).encode('utf-8'))
-                except Exception as e:
-                    logger.warn('failed to output record at offset: 0x%x: %s', r.offset, str(e), exc_info=True)
+                    try:
+                        os.write(sys.stdout.fileno(), format_incomplete_record(r).encode('utf-8'))
+                    except Exception as e:
+                        logger.warn('failed to output record at offset: 0x%x: %s', r.offset, str(e), exc_info=True)
 
             else:
                 raise RuntimeError('unexpected return type')
-        print('</evtxtract>')
+        os.write(sys.stdout.fileno(), '</evtxtract>'.encode())
 
         logging.info('recovered %d complete records', num_complete)
         logging.info('recovered %d incomplete records', num_incomplete)
